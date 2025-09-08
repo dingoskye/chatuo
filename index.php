@@ -12,6 +12,17 @@
     <title>Document</title>
 </head>
 <body>
+<nav>
 
+</nav>
+<header>
+
+</header>
+<main>
+
+</main>
+<footer>
+
+</footer>
 </body>
 </html>
