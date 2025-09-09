@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/widget.php';
-
+session_start();
 
 ?>
 
@@ -15,7 +15,14 @@ require __DIR__ . '/widget.php';
 </head>
 <body>
 <nav>
-
+    <?php if (isset($_SESSION['Login'])) { ?>
+        <a href="profile.php">Profiel</a>
+    <?php } ?>
+    <?php if (isset($_SESSION['Login'])) { ?>
+        <a href="logout.php">Logout</a>
+    <?php } else { ?>
+        <a href="login.php">Login</a>
+    <?php } ?>
 </nav>
 <header>
 
