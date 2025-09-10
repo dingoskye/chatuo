@@ -1,4 +1,4 @@
-// === Chatuo widget (met webservice) ===
+// === Chatuo widget (webservice + "waarom" uitleg) ===
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (s) => document.querySelector(s);
     const chat = $('#cu-chat');
@@ -11,7 +11,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = $('#cu-form');
     const input = $('#cu-input');
 
-    // ---- Flow: 1) zoeken -> 2) subjectief -> 3) objectief ----
+    // Avatar hover (ongewijzigd)
+    (function setupAvatarButton(){
+        if (!toggle) return;
+        const normal = toggle.dataset.avatar, hover = toggle.dataset.avatarHover;
+        if (normal) toggle.style.backgroundImage = `url('${normal}')`;
+        toggle.addEventListener('mouseenter', () => { if (hover) toggle.style.backgroundImage = `url('${hover}')`; });
+        toggle.addEventListener('mouseleave', () => { if (normal) toggle.style.backgroundImage = `url('${normal}')`; });
+        toggle.addEventListener('touchstart', () => { if (!hover) return; toggle.style.backgroundImage = `url('${hover}')`; setTimeout(() => { if (normal) toggle.style.backgroundImage = `url('${normal}')`; }, 300); }, { passive: true });
+    })();
+
+    // ---- Flow ----
     const FLOW = [
         { id: 'category', text: 'Waar ben je naar op zoek?', options: ['Laptop', 'Tablet', 'Monitor'], allowFreeText: true },
         { id: 'use', text: 'Waar ga je het vooral voor gebruiken?', options: ['Studie/werk', 'Gaming', 'Video/foto', 'Allround'], group: 'subjective' },
@@ -28,10 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
             default:        return ['Klein & licht', 'Middel', 'Groot'];
         }
     };
-
     const TIER_BY_BUDGET = { '< €500':'low','€500–€1000':'mid','> €1000':'high' };
 
-    // ---- Webservice laden ----
+    // ---- Webservice ----
     let CATALOG = [];
     async function ensureCatalog() {
         if (CATALOG.length) return CATALOG;
@@ -40,8 +49,13 @@ document.addEventListener('DOMContentLoaded', () => {
         CATALOG = await res.json();
         return CATALOG;
     }
+    async function fetchDetail(id) {
+        const res = await fetch(`${apiUrl}?id=${encodeURIComponent(id)}`, { headers: { 'Accept':'application/json' }});
+        if (!res.ok) throw new Error('detail API');
+        return res.json();
+    }
 
-    // ---- Scoring & Top 3 ----
+    // ---- Scoring ----
     function scoreProduct(p, a) {
         let s = 0; const reasons = [];
         if (p.category?.toLowerCase() === (a.category||'').toLowerCase()) { s+=4; reasons.push(`Categorie ${p.category}`); }
@@ -72,7 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.scrollTop = messages.scrollHeight;
         return el;
     };
-
     const addTyping = () => {
         const el = document.createElement('div');
         el.className = 'cu-typing';
@@ -81,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.scrollTop = messages.scrollHeight;
         return el;
     };
-
     const addOptions = (opts, onPick) => {
         const wrap = document.createElement('div');
         wrap.className = 'cu-quick';
@@ -98,13 +110,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return wrap;
     };
 
+    // ---- Result cards + uitleg ----
+    let lastTop3 = [];
     function renderResults(items) {
+        lastTop3 = items.slice(0); // kopie voor "waarom" in vrije tekst
         const wrap = document.createElement('div');
         wrap.className = 'cu-results';
 
         items.forEach((p, idx) => {
             const card = document.createElement('div');
             card.className = 'cu-card';
+            card.dataset.id = p.id;
             const badgeText = idx === 0 ? 'Beste match' : idx === 1 ? 'Sterke match' : 'Ook passend';
             const hasImg = !!p.image;
 
@@ -120,9 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
           ${(p.reasons||[]).slice(0,2).map(r => `<li>${r}</li>`).join('')}
         </ul>
         <div class="cu-cta">
-          <button class="cu-btn">Bekijk</button>
+          <button class="cu-btn info" data-id="${p.id}">Wat is zo goed aan dit product?</button>
           <button class="cu-btn secondary">Bewaar</button>
         </div>
+        <div class="cu-why-details" hidden></div>
       `;
             wrap.appendChild(card);
         });
@@ -131,7 +148,43 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.scrollTop = messages.scrollHeight;
     }
 
-    // ---- Flow ----
+    async function showWhy(productId, sourceBtn=null) {
+        // Zoek in cache; zo niet, laad detail
+        let p = (CATALOG || []).find(x => x.id === productId);
+        if (!p) p = await fetchDetail(productId);
+
+        // Probeer "why" uit API; anders val terug op match-reasons
+        let points = Array.isArray(p.why) ? p.why.slice(0) :
+            typeof p.why === 'string' ? [p.why] : null;
+
+        if (!points) {
+            // haal reasons uit top3 of re-score
+            const fromTop3 = lastTop3.find(x => x.id === productId);
+            const rs = fromTop3 ? fromTop3.reasons : scoreProduct(p, answers).reasons;
+            points = rs.length ? rs : ['Goede algehele match met jouw voorkeuren.'];
+        }
+
+        const card = sourceBtn ? sourceBtn.closest('.cu-card') : messages.querySelector(`.cu-card[data-id="${productId}"]`);
+        if (!card) { addMsg(`Waarom ${p.name} goed past:\n- ${points.join('\n- ')}`); return; }
+
+        const box = card.querySelector('.cu-why-details');
+        box.innerHTML = `
+      <div class="cu-why-title">Waarom is dit product zo goed?</div>
+      <ul class="cu-why-list">${points.map(li => `<li>${li}</li>`).join('')}</ul>
+    `;
+        box.hidden = !box.hidden; // toggle open/dicht
+        if (sourceBtn) sourceBtn.textContent = box.hidden ? 'Wat is zo goed aan dit product?' : 'Verberg uitleg';
+    }
+
+    // Delegated click handler voor info-button
+    messages.addEventListener('click', (e) => {
+        const btn = e.target.closest('.cu-btn.info');
+        if (!btn) return;
+        e.preventDefault();
+        showWhy(btn.dataset.id, btn);
+    });
+
+    // ---- Conversatiestroom ----
     let step = 0;
     const answers = {};
     let started = false;
@@ -139,7 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const askCurrent = () => {
         const q = FLOW[step];
         if (!q) return finish();
-
         if (q.dynamic && q.id === 'size') q.options = sizeOptionsFor(answers.category);
 
         addMsg(q.text);
@@ -190,34 +242,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const open = () => {
         chat.dataset.open = 'true';
         panel.hidden = false;
-        document.querySelector('#cu-toggle')?.setAttribute('aria-expanded','true');
+        toggle?.setAttribute('aria-expanded','true');
         if (!started) startFlow();
     };
     const close = () => {
         chat.dataset.open = 'false';
         panel.hidden = true;
-        document.querySelector('#cu-toggle')?.setAttribute('aria-expanded','false');
+        toggle?.setAttribute('aria-expanded','false');
     };
 
     toggle.addEventListener('click', () => (chat.dataset.open === 'true' ? close() : open()));
     closeBtn.addEventListener('click', close);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && chat.dataset.open === 'true') close(); });
 
-    // Free-text voor de eerste stap
+    // ---- Vrije tekst: "waarom is dit product zo goed" ----
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const text = (input.value || '').trim();
         if (!text) return;
-
-        const q = FLOW[step];
         addMsg(text, 'user');
         input.value = '';
 
+        const q = FLOW[step];
+        // Tijdens eerste vraag mag vrije tekst de categorie zijn
         if (q && q.id === 'category' && q.allowFreeText) {
             answers[q.id] = text;
-            next();
+            return next();
+        }
+
+        // Na resultaten: "waarom" intent
+        const low = text.toLowerCase();
+        const isWhy = low.includes('waarom') && (low.includes('goed') || low.includes('beste'));
+        if (isWhy && lastTop3.length) {
+            // probeer specifieke naam te herkennen
+            const byName = lastTop3.find(p => low.includes(p.name.toLowerCase()));
+            const target = byName || lastTop3[0];
+            addMsg(`Waarom ${target.name} zo goed past:`);
+            return showWhy(target.id);
         }
     });
 
-    console.log('Chatuo widget (webservice) loaded', { apiUrl });
+    console.log('Chatuo widget (webservice + waarom) loaded', { apiUrl });
 });

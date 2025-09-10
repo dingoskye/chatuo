@@ -17,7 +17,18 @@ if (!defined('CHATUO_WIDGET_RENDERED')) {
     <link rel="stylesheet" href="<?= $base ?>/css/style.css">
     <script defer src="<?= $base ?>/js/script.js"></script>
     <div id="cu-chat" class="cu-chat" aria-live="polite" data-api="<?= $base ?>/api/products.php">
-        <button id="cu-toggle" class="cu-toggle" aria-controls="cu-panel" aria-expanded="false" aria-label="Open chat">
+        <button
+                id="cu-toggle"
+                class="cu-toggle"
+                aria-controls="cu-panel"
+                aria-expanded="false"
+                aria-label="Open chat"
+                data-avatar="<?= $base ?>/img/chatuonormal.png"
+                data-avatar-hover="<?= $base ?>/img/chatuosmile.png">
+            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z" fill="currentColor"/>
+            </svg>
+        </button>
             <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
                 <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z" fill="currentColor"/>
             </svg>

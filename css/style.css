@@ -123,3 +123,31 @@
     border-radius: 8px; padding: 8px 10px; font-size: 13px; cursor: pointer;
 }
 .cu-btn.secondary { background: #fff; color: #111; }
+
+/* Avatar-knop met hover-swap via JS */
+.cu-toggle {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 72px; height: 72px; border-radius: 50%;
+    border: none; cursor: pointer;
+    background-color: #111;               /* fallback */
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    box-shadow: 0 10px 20px rgba(0,0,0,.2);
+}
+.cu-toggle:focus { outline: 2px solid #7c3aed; outline-offset: 2px; }
+.cu-toggle svg { display: none; }        /* verberg het icoon als de avatar er is */
+/* Uitlegblok in card */
+.cu-why-details {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    background: #fafafa;
+    font-size: 13px;
+}
+.cu-why-details .cu-why-title { font-weight: 600; margin-bottom: 6px; }
+.cu-why-details .cu-why-list { margin: 0; padding-left: 18px; }
+.cu-btn.info { background: #7c3aed; border-color: #7c3aed; }
+.cu-btn.info:hover { filter: brightness(1.05); }
+
