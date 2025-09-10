@@ -73,6 +73,11 @@
 }
 .cu-send:disabled { opacity: .6; cursor: not-allowed; }
 
+/* general styling */
+
+
+
+
 /* === Result cards === */
 .cu-results {
     align-self: stretch;
