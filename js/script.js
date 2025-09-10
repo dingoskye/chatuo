@@ -1,4 +1,4 @@
-// === Chatuo widget (webservice + "waarom" uitleg) ===
+// === Chatuo widget (webservice + "waarom" uitleg + appliances) ===
 document.addEventListener('DOMContentLoaded', () => {
     const $ = (s) => document.querySelector(s);
     const chat = $('#cu-chat');
@@ -11,36 +11,80 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = $('#cu-form');
     const input = $('#cu-input');
 
-    // Avatar hover (ongewijzigd)
+    // Avatar hover
     (function setupAvatarButton(){
         if (!toggle) return;
         const normal = toggle.dataset.avatar, hover = toggle.dataset.avatarHover;
         if (normal) toggle.style.backgroundImage = `url('${normal}')`;
         toggle.addEventListener('mouseenter', () => { if (hover) toggle.style.backgroundImage = `url('${hover}')`; });
         toggle.addEventListener('mouseleave', () => { if (normal) toggle.style.backgroundImage = `url('${normal}')`; });
-        toggle.addEventListener('touchstart', () => { if (!hover) return; toggle.style.backgroundImage = `url('${hover}')`; setTimeout(() => { if (normal) toggle.style.backgroundImage = `url('${normal}')`; }, 300); }, { passive: true });
+        toggle.addEventListener('touchstart', () => {
+            if (!hover) return;
+            toggle.style.backgroundImage = `url('${hover}')`;
+            setTimeout(() => { if (normal) toggle.style.backgroundImage = `url('${normal}')`; }, 300);
+        }, { passive: true });
     })();
 
-    // ---- Flow ----
+    // ----------------- Flow -----------------
     const FLOW = [
-        { id: 'category', text: 'Waar ben je naar op zoek?', options: ['Laptop', 'Tablet', 'Monitor'], allowFreeText: true },
-        { id: 'use', text: 'Waar ga je het vooral voor gebruiken?', options: ['Studie/werk', 'Gaming', 'Video/foto', 'Allround'], group: 'subjective' },
-        { id: 'priority', text: 'Wat vind je het belangrijkst?', options: ['Snelheid', 'Draagbaarheid', 'Batterijduur', 'Beeldkwaliteit', 'Prijs'], group: 'subjective' },
+        { id: 'category', text: 'Waar ben je naar op zoek?', options: ['Laptop', 'Tablet', 'Monitor', 'Wasmachine', 'Stofzuiger'], allowFreeText: true },
+
+        // subjectief — dynamisch per categorie
+        { id: 'use',      text: 'Waar ga je het vooral voor gebruiken?', options: [], group: 'subjective', dynamic: true },
+        { id: 'priority', text: 'Wat vind je het belangrijkst?',         options: [], group: 'subjective', dynamic: true },
+
+        // objectief
         { id: 'budget', text: 'Wat is je budget?', options: ['< €500', '€500–€1000', '> €1000'], group: 'objective' },
-        { id: 'size', text: 'Gewenste grootte?', options: [], group: 'objective', dynamic: true },
+        { id: 'size',   text: 'Gewenste grootte?', options: [], group: 'objective', dynamic: true },
     ];
 
-    const sizeOptionsFor = (category) => {
-        switch ((category || '').toLowerCase()) {
-            case 'laptop':  return ['13–14"', '15–16"', '17"'];
-            case 'tablet':  return ['8–9"', '10–11"', '12–13"'];
-            case 'monitor': return ['24–25"', '27"', '34"+'];
-            default:        return ['Klein & licht', 'Middel', 'Groot'];
+    // VRAAG- EN OPTIELOGICA PER CATEGORIE
+    function useQuestionFor(category) {
+        const c = (category || '').toLowerCase();
+        if (c === 'wasmachine') return 'Wat voor kleding ga je wassen?';
+        if (c === 'stofzuiger') return 'Wat ga je stofzuigen?';
+        return 'Waar ga je het vooral voor gebruiken?';
+    }
+    function priorityQuestionFor(category) {
+        const c = (category || '').toLowerCase();
+        if (c === 'wasmachine') return 'Wat vind je het belangrijkst bij het wassen?';
+        if (c === 'stofzuiger') return 'Wat vind je het belangrijkst aan de stofzuiger?';
+        return 'Wat vind je het belangrijkst?';
+    }
+    function subjectiveOptionsFor(category) {
+        const c = (category || '').toLowerCase();
+        if (c === 'wasmachine') {
+            return {
+                use: ['Dagelijks/Allround', 'Sport/Technisch', 'Fijne stoffen', 'Baby/kinderkleding', 'Grote ladingen'],
+                priority: ['Energiezuinigheid', 'Stil', 'Snelprogramma’s', 'Capaciteit']
+            };
         }
-    };
+        if (c === 'stofzuiger') {
+            return {
+                use: ['Harde vloeren', 'Tapijt', 'Beide', 'Huisdierenhaar'],
+                priority: ['Zuigkracht', 'Wendbaarheid', 'Snoerloos', 'Automatisch', 'Allergiefilter']
+            };
+        }
+        // default (IT)
+        return {
+            use: ['Studie/werk', 'Gaming', 'Video/foto', 'Allround'],
+            priority: ['Snelheid', 'Draagbaarheid', 'Batterijduur', 'Beeldkwaliteit', 'Prijs']
+        };
+    }
+    function sizeOptionsFor(category) {
+        switch ((category || '').toLowerCase()) {
+            case 'laptop':     return ['13–14"', '15–16"', '17"'];
+            case 'tablet':     return ['8–9"', '10–11"', '12–13"'];
+            case 'monitor':    return ['24–25"', '27"', '34"+'];
+            case 'wasmachine': return ['7 kg', '8 kg', '9 kg', '10+ kg'];
+            case 'stofzuiger': return ['Robot', 'Steel', 'Sled'];
+            default:           return ['Klein & licht', 'Middel', 'Groot'];
+        }
+    }
+
     const TIER_BY_BUDGET = { '< €500':'low','€500–€1000':'mid','> €1000':'high' };
 
-    // ---- Webservice ----
+    // ----------------- Webservice -----------------
     let CATALOG = [];
     async function ensureCatalog() {
         if (CATALOG.length) return CATALOG;
@@ -55,19 +99,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
     }
 
-    // ---- Scoring ----
+    // ----------------- Scoring -----------------
     function scoreProduct(p, a) {
         let s = 0; const reasons = [];
         if (p.category?.toLowerCase() === (a.category||'').toLowerCase()) { s+=4; reasons.push(`Categorie ${p.category}`); }
         const wantedTier = TIER_BY_BUDGET[a.budget];
         if (wantedTier && p.tier === wantedTier) { s+=3; reasons.push(`Binnen budget ${a.budget}`); }
-        if (a.size && p.size === a.size) { s+=2; reasons.push(`Grootte ${p.size}`); }
-        if (a.use && Array.isArray(p.uses) && p.uses.includes(a.use)) { s+=3; reasons.push(`Past bij gebruik “${a.use}”`); }
-        if (a.priority && Array.isArray(p.strengths) && p.strengths.includes(a.priority)) { s+=2; reasons.push(`Sterk in ${a.priority.toLowerCase()}`); }
+        if (a.size && p.size === a.size) { s+=2; reasons.push(`Grootte/Type ${p.size}`); }
+        if (a.use && Array.isArray(p.uses) && p.uses.map(String).includes(a.use)) { s+=3; reasons.push(`Past bij gebruik “${a.use}”`); }
+        if (a.priority && Array.isArray(p.strengths) && p.strengths.map(String).includes(a.priority)) { s+=2; reasons.push(`Sterk in ${a.priority.toLowerCase()}`); }
         if (Array.isArray(p.uses) && p.uses.includes('Allround')) s+=1;
         return { score: s, reasons };
     }
-
     async function top3Products(a) {
         const list = await ensureCatalog();
         return list
@@ -77,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .slice(0, 3);
     }
 
-    // ---- UI helpers ----
+    // ----------------- UI helpers -----------------
     const addMsg = (text, who = 'bot') => {
         const el = document.createElement('div');
         el.className = `cu-msg ${who}`;
@@ -110,10 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return wrap;
     };
 
-    // ---- Result cards + uitleg ----
+    // ----------------- Result cards + "Waarom" -----------------
     let lastTop3 = [];
     function renderResults(items) {
-        lastTop3 = items.slice(0); // kopie voor "waarom" in vrije tekst
+        lastTop3 = items.slice(0);
         const wrap = document.createElement('div');
         wrap.className = 'cu-results';
 
@@ -149,16 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function showWhy(productId, sourceBtn=null) {
-        // Zoek in cache; zo niet, laad detail
         let p = (CATALOG || []).find(x => x.id === productId);
         if (!p) p = await fetchDetail(productId);
 
-        // Probeer "why" uit API; anders val terug op match-reasons
-        let points = Array.isArray(p.why) ? p.why.slice(0) :
-            typeof p.why === 'string' ? [p.why] : null;
+        let points = Array.isArray(p.why) ? p.why.slice(0)
+            : typeof p.why === 'string' ? [p.why] : null;
 
         if (!points) {
-            // haal reasons uit top3 of re-score
             const fromTop3 = lastTop3.find(x => x.id === productId);
             const rs = fromTop3 ? fromTop3.reasons : scoreProduct(p, answers).reasons;
             points = rs.length ? rs : ['Goede algehele match met jouw voorkeuren.'];
@@ -172,11 +212,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="cu-why-title">Waarom is dit product zo goed?</div>
       <ul class="cu-why-list">${points.map(li => `<li>${li}</li>`).join('')}</ul>
     `;
-        box.hidden = !box.hidden; // toggle open/dicht
+        box.hidden = !box.hidden;
         if (sourceBtn) sourceBtn.textContent = box.hidden ? 'Wat is zo goed aan dit product?' : 'Verberg uitleg';
     }
 
-    // Delegated click handler voor info-button
     messages.addEventListener('click', (e) => {
         const btn = e.target.closest('.cu-btn.info');
         if (!btn) return;
@@ -184,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showWhy(btn.dataset.id, btn);
     });
 
-    // ---- Conversatiestroom ----
+    // ----------------- Conversatiestroom -----------------
     let step = 0;
     const answers = {};
     let started = false;
@@ -192,7 +231,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const askCurrent = () => {
         const q = FLOW[step];
         if (!q) return finish();
-        if (q.dynamic && q.id === 'size') q.options = sizeOptionsFor(answers.category);
+
+        if (q.dynamic) {
+            if (q.id === 'use') {
+                q.text = useQuestionFor(answers.category);
+                q.options = subjectiveOptionsFor(answers.category).use;
+            } else if (q.id === 'priority') {
+                q.text = priorityQuestionFor(answers.category);
+                q.options = subjectiveOptionsFor(answers.category).priority;
+            } else if (q.id === 'size') {
+                q.options = sizeOptionsFor(answers.category);
+            }
+        }
 
         addMsg(q.text);
         const chips = addOptions(q.options, (label) => {
@@ -238,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Open/close ----
+    // Open/close
     const open = () => {
         chat.dataset.open = 'true';
         panel.hidden = false;
@@ -255,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.addEventListener('click', close);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && chat.dataset.open === 'true') close(); });
 
-    // ---- Vrije tekst: "waarom is dit product zo goed" ----
+    // Vrije tekst intent
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const text = (input.value || '').trim();
@@ -264,17 +314,14 @@ document.addEventListener('DOMContentLoaded', () => {
         input.value = '';
 
         const q = FLOW[step];
-        // Tijdens eerste vraag mag vrije tekst de categorie zijn
         if (q && q.id === 'category' && q.allowFreeText) {
             answers[q.id] = text;
             return next();
         }
 
-        // Na resultaten: "waarom" intent
         const low = text.toLowerCase();
         const isWhy = low.includes('waarom') && (low.includes('goed') || low.includes('beste'));
         if (isWhy && lastTop3.length) {
-            // probeer specifieke naam te herkennen
             const byName = lastTop3.find(p => low.includes(p.name.toLowerCase()));
             const target = byName || lastTop3[0];
             addMsg(`Waarom ${target.name} zo goed past:`);
@@ -282,5 +329,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    console.log('Chatuo widget (webservice + waarom) loaded', { apiUrl });
+    console.log('Chatuo widget (appliances + fixed questions) loaded', { apiUrl });
 });
