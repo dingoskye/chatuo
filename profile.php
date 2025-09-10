@@ -73,7 +73,7 @@ mysqli_close($db);
     </div>
 </main>
 <footer>
-
+    <p>©Electroworld</p>
 </footer>
 </body>
 </html>
