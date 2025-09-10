@@ -145,7 +145,7 @@ mysqli_close($db);
     </form>
 </main>
 <footer>
-
+    <p>©Electroworld</p>
 </footer>
 </body>
 </html>
