@@ -240,9 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 q.text = priorityQuestionFor(answers.category);
                 q.options = subjectiveOptionsFor(answers.category).priority;
             } else if (q.id === 'size') {
+                // <-- HIER: alleen de stofzuiger-vraagtekst aanpassen
+                q.text = sizeQuestionFor(answers.category);
                 q.options = sizeOptionsFor(answers.category);
             }
         }
+
 
         addMsg(q.text);
         const chips = addOptions(q.options, (label) => {
@@ -252,6 +255,13 @@ document.addEventListener('DOMContentLoaded', () => {
             next();
         });
     };
+    function sizeQuestionFor(category) {
+        const c = (category || '').toLowerCase();
+        return c === 'stofzuiger'
+            ? 'Wat voor soort stofzuiger zoek je?'
+            : 'Gewenste grootte?';
+    }
+
 
     const next = () => {
         step += 1;
